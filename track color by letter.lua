@@ -1,9 +1,3 @@
--- User configuration
-local NAME_COLOR_DEPTH = 3  -- Tracks at this depth or shallower will be colored by their own name
-                           -- Tracks deeper than this will inherit parent's color
-                           -- Example: 3 means levels 0,1,2 get their own colors, 3+ inherit from parent
-                           -- Minimum value is 1 (only root level gets own colors)
-
 function getColorForLetter(letter)
   -- Convert letter to uppercase for consistency
   letter = string.upper(letter)
@@ -88,6 +82,27 @@ function getAllTracks()
 end
 
 function main()
+  -- Get last used color depth or default to 3
+  local last_depth = reaper.GetExtState("track_color_by_letter", "color_depth")
+  local default_depth = last_depth ~= "" and last_depth or "3"
+  
+  -- Get color depth from user
+  local retval, input = reaper.GetUserInputs("Track Color Depth", 1,
+    "Color Depth (1-10, last used: " .. default_depth .. ")\nTracks at this depth or shallower get their own colors,extrawidth=100",
+    default_depth)
+  
+  if not retval then return end -- User cancelled
+  
+  -- Validate input
+  local NAME_COLOR_DEPTH = tonumber(input)
+  if not NAME_COLOR_DEPTH or NAME_COLOR_DEPTH < 1 or NAME_COLOR_DEPTH > 10 then
+    reaper.ShowMessageBox("Please enter a number between 1 and 10", "Invalid Input", 0)
+    return
+  end
+  
+  -- Store the value for next time
+  reaper.SetExtState("track_color_by_letter", "color_depth", tostring(NAME_COLOR_DEPTH), true)
+  
   -- Get all tracks sorted by depth
   local tracks = getAllTracks()
   
