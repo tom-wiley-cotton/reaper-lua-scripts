@@ -40,7 +40,7 @@ function adjustColorForDepth(color, depth)
   -- Move colors closer to grey with each level
   local greyValue = 128
   --                     \/ - minimum
-  local factor = math.max(1, 1 - (depth * 0.2)) -- Reduce by 20% per level, minimum 100%
+  local factor = math.max(0.6, 1 - (depth * 0.1)) -- dimming by levle
   
   local r = math.floor(color[1] * factor + greyValue * (1 - factor))
   local g = math.floor(color[2] * factor + greyValue * (1 - factor))
