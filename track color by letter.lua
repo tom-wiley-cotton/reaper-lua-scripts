@@ -39,7 +39,8 @@ function adjustColorForDepth(color, depth)
   -- Reduce saturation based on depth
   -- Move colors closer to grey with each level
   local greyValue = 128
-  local factor = math.max(0.4, 1 - (depth * 0.2)) -- Reduce by 20% per level, minimum 40%
+  --                     \/ - minimum
+  local factor = math.max(1, 1 - (depth * 0.2)) -- Reduce by 20% per level, minimum 100%
   
   local r = math.floor(color[1] * factor + greyValue * (1 - factor))
   local g = math.floor(color[2] * factor + greyValue * (1 - factor))
