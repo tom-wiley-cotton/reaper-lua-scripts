@@ -39,7 +39,7 @@ function adjustColorForDepth(color, depth)
   -- Reduce saturation based on depth
   -- Move colors closer to grey with each level
   local greyValue = 128
-  local factor = math.max(0.4, 1 - (depth * 0.2)) -- Reduce by 20% per level, minimum 40%
+  local factor = math.max(0.6, 1 - (depth * 0.2)) -- Reduce by 20% per level, minimum 40%
   
   local r = math.floor(color[1] * factor + greyValue * (1 - factor))
   local g = math.floor(color[2] * factor + greyValue * (1 - factor))
@@ -63,53 +63,51 @@ function getFolderDepth(track)
   return depth
 end
 
-function colorChildTracks(parentTrack, baseColor, parentDepth)
-  local depth = 0
-  local track_idx = reaper.GetMediaTrackInfo_Value(parentTrack, "IP_TRACKNUMBER") - 1
+function getAllTracks()
+  local tracks = {}
   local num_tracks = reaper.CountTracks(0)
   
-  -- Set parent track color
-  reaper.SetTrackColor(parentTrack, adjustColorForDepth(baseColor, parentDepth))
-  
-  -- Loop through following tracks
-  for i = track_idx + 1, num_tracks - 1 do
+  -- Collect all tracks
+  for i = 0, num_tracks - 1 do
     local track = reaper.GetTrack(0, i)
-    local _, flags = reaper.GetTrackState(track)
-    
-    -- Update folder depth
-    if flags & 1 == 1 then depth = depth + 1 end      -- Found a folder
-    if flags & 2 == 2 then depth = depth - 1 end      -- Found a folder end
-    
-    -- If depth becomes negative, we've reached the end of our folder
-    if depth < 0 then break end
-    
-    -- Get the actual depth of this track for color adjustment
-    local trackDepth = parentDepth + (isFolder(track) and depth or depth + 1)
-    
-    -- Color the track
-    reaper.SetTrackColor(track, adjustColorForDepth(baseColor, trackDepth))
+    local depth = getFolderDepth(track)
+    local _, track_name = reaper.GetTrackName(track, "")
+    table.insert(tracks, {track = track, depth = depth, name = track_name})
   end
+  
+  -- Sort tracks by depth (shallow to deep)
+  table.sort(tracks, function(a, b) return a.depth < b.depth end)
+  
+  return tracks
 end
 
 function main()
-  -- Get number of tracks
-  local num_tracks = reaper.CountTracks(0)
+  -- Get all tracks sorted by depth
+  local tracks = getAllTracks()
   
-  -- Loop through all tracks
-  for i = 0, num_tracks - 1 do
-    local track = reaper.GetTrack(0, i)
+  -- Process all tracks
+  for _, track_info in ipairs(tracks) do
+    local track = track_info.track
+    local depth = track_info.depth
+    local name = track_info.name
     
-    -- Only process top-level folders
-    if isFolder(track) and getFolderDepth(track) == 0 then
-      local _, track_name = reaper.GetTrackName(track, "")
-      
-      if track_name and track_name:len() > 0 then
-        -- Get first letter and corresponding base color
-        local first_letter = string.sub(track_name, 1, 1)
+    if name and name:len() > 0 then
+      if depth <= 2 then
+        -- Color tracks at depths 0-2 by their own first letter
+        local first_letter = string.sub(name, 1, 1)
         local baseColor = getColorForLetter(first_letter)
-        
-        -- Color the folder and all its children
-        colorChildTracks(track, baseColor, 0)
+        reaper.SetTrackColor(track, adjustColorForDepth(baseColor, depth))
+      else
+        -- For deeper tracks, color by parent's color
+        local parent = reaper.GetParentTrack(track)
+        if parent then
+          local _, parent_name = reaper.GetTrackName(parent, "")
+          if parent_name and parent_name:len() > 0 then
+            local parent_letter = string.sub(parent_name, 1, 1)
+            local parentColor = getColorForLetter(parent_letter)
+            reaper.SetTrackColor(track, adjustColorForDepth(parentColor, depth))
+          end
+        end
       end
     end
   end
