@@ -1,3 +1,9 @@
+-- User configuration
+local NAME_COLOR_DEPTH = 3  -- Tracks at this depth or shallower will be colored by their own name
+                           -- Tracks deeper than this will inherit parent's color
+                           -- Example: 3 means levels 0,1,2 get their own colors, 3+ inherit from parent
+                           -- Minimum value is 1 (only root level gets own colors)
+
 function getColorForLetter(letter)
   -- Convert letter to uppercase for consistency
   letter = string.upper(letter)
@@ -39,7 +45,7 @@ function adjustColorForDepth(color, depth)
   -- Reduce saturation based on depth
   -- Move colors closer to grey with each level
   local greyValue = 128
-  local factor = math.max(0.6, 1 - (depth * 0.2)) -- Reduce by 20% per level, minimum 40%
+  local factor = math.max(0.4, 1 - (depth * 0.2)) -- Reduce by 20% per level, minimum 40%
   
   local r = math.floor(color[1] * factor + greyValue * (1 - factor))
   local g = math.floor(color[2] * factor + greyValue * (1 - factor))
@@ -92,21 +98,28 @@ function main()
     local name = track_info.name
     
     if name and name:len() > 0 then
-      if depth <= 2 then
-        -- Color tracks at depths 0-2 by their own first letter
+      if depth <= math.max(1, NAME_COLOR_DEPTH) - 1 then
+        -- Color tracks up to NAME_COLOR_DEPTH-1 by their own first letter
+        -- Example: NAME_COLOR_DEPTH=3 means depths 0,1,2 get own colors
         local first_letter = string.sub(name, 1, 1)
         local baseColor = getColorForLetter(first_letter)
         reaper.SetTrackColor(track, adjustColorForDepth(baseColor, depth))
       else
-        -- For deeper tracks, color by parent's color
+        -- For deeper tracks, color by nearest parent's color that has its own letter color
         local parent = reaper.GetParentTrack(track)
-        if parent then
-          local _, parent_name = reaper.GetTrackName(parent, "")
-          if parent_name and parent_name:len() > 0 then
-            local parent_letter = string.sub(parent_name, 1, 1)
-            local parentColor = getColorForLetter(parent_letter)
-            reaper.SetTrackColor(track, adjustColorForDepth(parentColor, depth))
+        while parent do
+          local parent_depth = getFolderDepth(parent)
+          -- Check if this parent should have its own letter color
+          if parent_depth <= math.max(1, NAME_COLOR_DEPTH) - 1 then
+            local _, parent_name = reaper.GetTrackName(parent, "")
+            if parent_name and parent_name:len() > 0 then
+              local parent_letter = string.sub(parent_name, 1, 1)
+              local parentColor = getColorForLetter(parent_letter)
+              reaper.SetTrackColor(track, adjustColorForDepth(parentColor, depth))
+              break
+            end
           end
+          parent = reaper.GetParentTrack(parent)
         end
       end
     end
